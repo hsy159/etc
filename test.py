@@ -51,7 +51,7 @@ def compare_same_key(d1,d2):
 	return key_lst
 
 def fillin_zero(d,key):
-	for i in range(1,101): #숫자는 지금 사용한 데이터, 필요하면 나중에 변경
+	for i in range(1,101): 
 		if i not in d[key]:
 			d[key][i] = int(0)
 
@@ -77,5 +77,17 @@ for key in d2:
 
 dict_to_excelfile(d1, 'overpass_df', 'overpass.xls')
 dict_to_excelfile(d2, 'nonoverpass_df', 'nonoverpass.xls')
+
+overpass_df = pd.DataFrame.from_dict(d1)
+nonoverpass_df = pd.DataFrame.from_dict(d2)
+
+overpass_df['result'] = 1
+nonoverpass_df['result'] = 0
+
+pd.DataFrame.to_excel(overpass_df,'overpass.xls')
+pd.DataFrame.to_excel(nonoverpass_df,'nonoverpass.xls')
+
+
+
 
 
