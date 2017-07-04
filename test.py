@@ -65,6 +65,9 @@ def dict_to_excelfile(lst,df_name,name):
 	pd.DataFrame.to_excel(df_name,name)
 
 
+	
+	
+	
 df1, df2 = read_xls('100pic.xls')
 d1 = to_list(df1)
 d2 = to_list(df2)
@@ -88,6 +91,19 @@ pd.DataFrame.to_excel(overpass_df,'overpass.xls')
 pd.DataFrame.to_excel(nonoverpass_df,'nonoverpass.xls')
 
 
+overpass_matrix = pd.DataFrame.as_matrix(overpass_df)
+nonoverpass_matrix = pd.DataFrame.as_matrix(nonoverpass_df)
 
+overcol_num = len(overpass_matrix[0])
+nonovercol_num = len(nonoverpass_matrix[0])
 
+overpass_x = overpass_matrix[:,:overcol_num-1]
+overpass_y = overpass_matrix[:,overcol_num-1]
 
+key_lst = []
+for key in df1:
+    key_lst.append(key)
+
+for key in df2:
+    if key not in key_lst:
+        key_lst.append(key)
