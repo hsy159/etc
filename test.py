@@ -4,11 +4,16 @@ import matplotlib.pyplot as plt
 import xlwt
 import numpy as np
 import sklearn
+import matplotlib.pyplot as plt
+import numpy as np
+import scipy.stats as stats
+import pylab as pl
+
+from scipy.stats import norm
 from sklearn.linear_model import Lasso
 from sklearn.linear_model import LassoCV
 from sklearn import cross_validation
 from sklearn import linear_model
-
 
 
 def read_xls(file_name):
@@ -87,7 +92,7 @@ def fillin_zero(d, key, length):
 		if i not in d[key]:
 			d[key][i] = int(0)
 
-def drawing(key):
+def draw_key_graph(key):
 	plt.plot(d1[key])
 	plt.plot(d2[key])
 	plt.show()
@@ -149,6 +154,19 @@ def split_dataset_no_cv(x, y, shuffle=False):
         
     return (x_train, x_test, y_train, y_test)
 
+def normal_distribution(list1,list2):
+	list1 = sorted(list1)
+	list2 = sorted(list2)
+	fit = stats.norm.pdf(list1, np.mean(list1), np.std(list1))
+	fit = stats.norm.pdf(list2, np.mean(list2), np.std(list2))
+	plt.plot(list1,fit,'-o')
+	plt.plot(list2,fit,'-o')
+	print "Overpass mean : ", np.mean(list1)
+	print "Overpass std : ", np.std(list1)
+	print "Non overpass mean : ", np.mean(list2)
+	print "Non overpass std : ", np.std(list2)
+	plt.show()
+
 
 df1, df2 = read_xls('100pic.xls')
 d1 = dict()
@@ -198,8 +216,6 @@ y_20test = testdata_matrix[:,matrix_len-1]
 print "Train set: ", len(x_data)
 print "Test set : ", len(x_20test) 
 
-print y_20test[8]
-
 
 pred_result = []
 clf = Lasso(alpha = 0.1)
@@ -210,11 +226,11 @@ pred = pred.tolist()
 
 # if smaller than 0.5 then predict to 0
 for i in pred:
-	if i < 0.5:
+	if i < 0.4:
 		pred_result.append(0)
 	else:
 		pred_result.append(1)
-#print np.array(pred)
+print np.array(pred)
 print np.array(pred_result)
 print y_20test
 #print clf.fit(x_train,y_train).coef_
@@ -229,6 +245,10 @@ for i in range(1,len(y_20test)):
 
 print "Accuracy : ", (float(same_cnt)/len(y_20test))
 
+pred_overpass = pred[0:20]
+pred_nonoverpass = pred[20:41]
+#print np.array(pred_overpass)
+#print np.array(pred_nonoverpass)
 
 
-
+normal_distribution(pred_overpass, pred_nonoverpass)
