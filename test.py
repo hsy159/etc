@@ -41,8 +41,8 @@ def to_list(d, df, start):
 					a_name = ''
 					a_per = a[a_len-1].split('%')[0]
 					for k in range(0,len(a)-1):
-						#if (k > 0) & (k < len(a)-2):
-							#a_name += ' '
+						if (k > 0) & (k < len(a)-2):
+							a_name += ' '
 						a_name += a[k]
 					if a_name in d:
 						d[a_name][start + i] = int(a_per)
@@ -70,6 +70,8 @@ def prep_test_data(d, df, start):
 					a_name = ''
 					a_per = a[a_len-1].split('%')[0]
 					for k in range(0,len(a)-1):
+						if (k > 0) & (k < len(a)-2):
+							a_name += ' '						
 						a_name += a[k]
 					if a_name in d:
 						d[a_name][start + i] = int(a_per)
@@ -177,7 +179,6 @@ df3, df4 = read_xls('20pic.xls')
 key_dict = make_key_dict(d1)
 key_dict = prep_test_data(key_dict, df3, 0)
 key_dict = prep_test_data(key_dict, df4, 20)
-
 #dict_to_excelfile(key_dict, 'temp', 'test.xls')
 
 for key in d1:
@@ -194,8 +195,8 @@ test_df = pd.DataFrame.from_dict(key_dict)
 test_df['Result'] = 1
 test_df['Result'][20:41] = 0
 
-pd.DataFrame.to_excel(all_df, 'final_data.xls')
-pd.DataFrame.to_excel(test_df, 'test.xls')
+#pd.DataFrame.to_excel(all_df, 'final_data.xls')
+#pd.DataFrame.to_excel(test_df, 'test.xls')
 
 data_matrix = pd.DataFrame.as_matrix(all_df)
 matrix_len = len(data_matrix[0])
@@ -224,19 +225,21 @@ clf.fit(x_data,y_data)
 pred = clf.predict(x_20test)
 pred = pred.tolist()
 
-# if smaller than 0.5 then predict to 0
 for i in pred:
 	if i < 0.4:
 		pred_result.append(0)
 	else:
 		pred_result.append(1)
-print np.array(pred)
-print np.array(pred_result)
-print y_20test
+#print np.array(pred)
+#print np.array(pred_result)
+#print y_20test
 #print clf.fit(x_train,y_train).coef_
 #print clf.fit(x_train,y_train).intercept_
 #print clf.fit(x_train,y_train).n_iter_
-#
+#print clf.fit(x_data,y_data).coef_
+#print clf.fit(x_data,y_data).intercept_
+#print clf.fit(x_data,y_data).n_iter_
+
 # Accuracy checking
 same_cnt = 0
 for i in range(1,len(y_20test)):
@@ -251,4 +254,24 @@ pred_nonoverpass = pred[20:41]
 #print np.array(pred_nonoverpass)
 
 
-normal_distribution(pred_overpass, pred_nonoverpass)
+#normal_distribution(pred_overpass, pred_nonoverpass)
+
+coef = clf.fit(x_data,y_data).coef_
+intercept = clf.fit(x_data,y_data).intercept_
+coef_col_name = list(all_df)
+
+#print coef_col_name, coef
+coef_dict = dict()
+for i in range(0,len(coef)):
+	if coef[i] != 0:
+		coef_dict[coef_col_name[i]] = coef[i]
+'''
+print coef_dict
+print intercept
+'''
+
+coef_dict['intercept'] = intercept
+coef_df = pd.DataFrame.from_dict(coef_dict, orient = 'index')
+print coef_df
+
+#pd.DataFrame.to_excel(coef_df,'coefficient.xls') # if do this, all values of coef will change to 0...
