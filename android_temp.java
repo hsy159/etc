@@ -20,6 +20,9 @@ import android.Manifest;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.ImageFormat;
+import android.hardware.Camera;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -32,11 +35,12 @@ import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
+import android.view.SurfaceHolder;
 import android.view.View;
-import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.VideoView;
 
 import com.google.api.client.extensions.android.http.AndroidHttp;
 import com.google.api.client.googleapis.json.GoogleJsonResponseException;
@@ -61,7 +65,15 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.Locale;
 
-public class MainActivity extends AppCompatActivity {
+
+public class MainActivity extends AppCompatActivity implements SurfaceHolder.Callback, Camera.PreviewCallback {
+
+    Camera camera = null;
+    SurfaceHolder  holder = null;
+    VideoView videoView = null;
+    TextView textView = null;
+
+
     private static final String CLOUD_VISION_API_KEY = "AIzaSyAtc1naSTJMToiz137wrOwpWzpeFIeeYwc";
     public static final String FILE_NAME = "temp.jpg";
     private static final String ANDROID_CERT_HEADER = "X-Android-Cert";
@@ -82,25 +94,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-        Button test = (Button) findViewById(R.id.check);
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
-
-        double sum = 0;
-        double intercept = 0.467190807864;
-        String arrayOfKey[] = {"Family Car", "Automotive Exterior", "Driving", "Area", "Controlled Access Highway", "Sky", "Traffic Sign", "Sport Utility Vehicle", "Skyscraper", "Vehicle",
-                "Residential Area", "Highway", "Metropolis", "Tower Block", "Thoroughfare", "Track", "Guard Rail", "Suburb", "Skyway", "Traffic", "Walkway", "Mode Of Transport", "Intersection",
-                "Structure", "Building", "Mixed Use", "Girder Bridge", "Road Trip", "Plaza", "Tree", "Plant", "Skyline", "Horizon", "Minivan", "Public Transport", "Sidewalk", "Road",
-                "Bridge", "Compact Car", "Asphalt", "Fixed Link", "Overpass", "Shoulder", "Pedestrian", "Urban Design", "Street", "Transport", "Traffic Congestion", "Real Estate",
-                "Urban Area", "Neighbourhood", "Road Surface"};
-        double arrayOfWeight[] = {0.001959506, -0.000343122, 0.001275561, 0.001599445, 0.000541903, 0.00268464, 0.000818015, -0.003733233, 0.000110012, -0.002045991, 0.000873594,
-                0.000193858, -0.000141353, 0.004337384, -0.000696148, 3.61E-05, 0.001959947, 0.000340459, 0.000160082, 0.001247439, -0.002186815, 0.000794712, -0.000493615, -0.00198564, -0.000546126,
-                -0.000261767, -0.003233404, 0.002249064, 0.001689095, -0.000727519, -0.001039317, -0.000664931, -0.000457226, 0.000439203, -0.003442012, -0.001587461, 0.001189973, 0.000109912, -0.000714525,
-                -5.31E-05, -0.000120956, -0.001965535, 0.000462156, -0.001215803, 0.001701634, -0.002908464, -0.000100532, -0.00119247, 0.000177161, 0.00090039, 0.000377653, -5.68E-05};
-
-        final Hashtable<String, Double> weight_table = new Hashtable();
-        for (int i=0; i< arrayOfKey.length;i++){
-            weight_table.put(arrayOfKey[i],arrayOfWeight[i]);
-        }
 
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -124,7 +118,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        test.setOnClickListener(new View.OnClickListener(){
+/*        test.setOnClickListener(new View.OnClickListener(){
             public void onClick(View view){
                 AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
                 builder
@@ -133,9 +127,30 @@ public class MainActivity extends AppCompatActivity {
 
                 builder.create().show();
             }
-        });
+        });*/
         mImageDetails = (TextView) findViewById(R.id.image_details);
         mMainImage = (ImageView) findViewById(R.id.main_image);
+
+        // camera
+        videoView = (VideoView)findViewById(R.id.videoView);
+        textView = (TextView)findViewById(R.id.textView);
+
+        camera = Camera.open();
+        Camera.Parameters params = camera.getParameters();
+        params.setPreviewFrameRate(10);
+        params.setPreviewFpsRange(10000, 20000);
+        params.setPreviewSize(640, 480);
+        params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
+//        params.setPictureFormat(ImageFormat.NV21);
+        params.setPreviewFormat(ImageFormat.JPEG);
+        camera.setDisplayOrientation(90);
+        camera.setParameters(params);
+        Log.e("hsy test","test");
+
+        holder = videoView.getHolder();
+        holder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
+
+        holder.addCallback(this);
     }
 
     public void startGalleryChooser() {
@@ -212,7 +227,7 @@ public class MainActivity extends AppCompatActivity {
                 else{
                     callCloudVision(bitmap, false);
                 }
-                mMainImage.setImageBitmap(bitmap);
+                mMainImage.setImageBitmap(bitmap); // 이미지 보여주는 화면 나중엔 이거 없애야 함
 
             } catch (IOException e) {
                 Log.d(TAG, "Image picking failed because " + e.getMessage());
@@ -256,7 +271,7 @@ public class MainActivity extends AppCompatActivity {
                                 }
                             };
 
-                    Vision.Builder builder = new Vision.Builder(httpTransport, jsonFactory, null);
+                    Vision.Builder builder = new Vision.Builder(httpTransport, jsonFactory, null); // null은 http request initializer
                     builder.setVisionRequestInitializer(requestInitializer);
 
                     Vision vision = builder.build();
@@ -273,6 +288,9 @@ public class MainActivity extends AppCompatActivity {
                         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
                         if(Camera == true){
                             bitmap.compress(Bitmap.CompressFormat.JPEG, 90, byteArrayOutputStream);
+                        }
+                        else{
+                            bitmap.compress(Bitmap.CompressFormat.PNG, 90, byteArrayOutputStream);
                         }
                         Log.e("hsy test", ""+Camera);
 
@@ -317,7 +335,7 @@ public class MainActivity extends AppCompatActivity {
             }
         }.execute();
     }
-
+/*
     public Bitmap scaleBitmapDown(Bitmap bitmap, int maxDimension) {
 
         int originalWidth = bitmap.getWidth();
@@ -337,7 +355,7 @@ public class MainActivity extends AppCompatActivity {
         }
         return Bitmap.createScaledBitmap(bitmap, resizedWidth, resizedHeight, false);
     }
-
+*/
     private String convertResponseToString(BatchAnnotateImagesResponse response) {
         String message = "I found these things:\n\n";
         boolean wordExists = false;
@@ -374,7 +392,6 @@ public class MainActivity extends AppCompatActivity {
         for (EntityAnnotation label : labels){
             wordExists = weight_table.containsKey(label.getDescription());
             if (wordExists){
-                message += label.getDescription();
                 sum += weight_table.get(label.getDescription()) * label.getScore() *100;
             }
         }
@@ -389,4 +406,34 @@ public class MainActivity extends AppCompatActivity {
         }
         return message;
     }
+
+    @Override
+    public void onPreviewFrame(byte[] data, Camera camera) {
+        textView.setText("DATA: " + data.toString());
+        textView.setHighlightColor(Color.BLACK);
+        textView.setTextColor(Color.WHITE);
+        textView.setShadowLayer(2.0f, 1.0f, 1.0f, Color.BLACK);
+    }
+
+    @Override
+    public void surfaceCreated(SurfaceHolder surfaceHolder) {
+        try {
+            camera.unlock();
+            camera.reconnect();
+            camera.setPreviewDisplay(holder);
+            camera.startPreview();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    @Override
+    public void surfaceChanged(SurfaceHolder surfaceHolder, int i, int i1, int i2) {
+        camera.setPreviewCallback(this);
+    }
+
+    @Override
+    public void surfaceDestroyed(SurfaceHolder surfaceHolder) {
+
+    }
 }
+
