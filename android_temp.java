@@ -11,8 +11,10 @@ import android.Manifest;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
-import android.graphics.ImageFormat;
+import android.graphics.Rect;
+import android.graphics.YuvImage;
 import android.hardware.Camera;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -25,6 +27,7 @@ import android.support.v4.content.FileProvider;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.util.Base64;
 import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.View;
@@ -51,18 +54,32 @@ import com.google.api.services.vision.v1.model.Image;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.Locale;
+
+import static android.graphics.ImageFormat.NV21;
 
 
 public class MainActivity extends AppCompatActivity implements SurfaceHolder.Callback, Camera.PreviewCallback {
 
     Camera camera = null;
     SurfaceHolder  holder = null;
-    VideoView videoView = null;
-    TextView textView = null;
+    private VideoView videoView; // private 안하면 왜 안되는걸까
+    private TextView textView;
+
+    public static final double intercept = 0.467190807864;
+    public static String arrayOfKey[] = {"family car", "automotive exterior", "driving", "area", "controlled access highway", "sky", "traffic sign", "sport utility vehicle", "skyscraper", "vehicle",
+            "residential area", "highway", "metropolis", "tower block", "thoroughfare", "track", "guard rail", "suburb", "skyway", "traffic", "walkway", "mode of transport", "intersection",
+            "structure", "building", "mixed use", "girder bridge", "road trip", "plaza", "tree", "plant", "skyline", "horizon", "minivan", "public transport", "sidewalk", "road",
+            "bridge", "compact car", "asphalt", "fixed link", "overpass", "shoulder", "pedestrian", "urban design", "street", "transport", "traffic congestion", "real estate",
+            "urban area", "neighbourhood", "road surface"};
+    public static double arrayOfWeight[] = {0.001959506, -0.000343122, 0.001275561, 0.001599445, 0.000541903, 0.00268464, 0.000818015, -0.003733233, 0.000110012, -0.002045991, 0.000873594,
+            0.000193858, -0.000141353, 0.004337384, -0.000696148, 3.61E-05, 0.001959947, 0.000340459, 0.000160082, 0.001247439, -0.002186815, 0.000794712, -0.000493615, -0.00198564, -0.000546126,
+            -0.000261767, -0.003233404, 0.002249064, 0.001689095, -0.000727519, -0.001039317, -0.000664931, -0.000457226, 0.000439203, -0.003442012, -0.001587461, 0.001189973, 0.000109912, -0.000714525,
+            -5.31E-05, -0.000120956, -0.001965535, 0.000462156, -0.001215803, 0.001701634, -0.002908464, -0.000100532, -0.00119247, 0.000177161, 0.00090039, 0.000377653, -5.68E-05};
 
 
     private static final String CLOUD_VISION_API_KEY = "AIzaSyAtc1naSTJMToiz137wrOwpWzpeFIeeYwc";
@@ -75,6 +92,7 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
     private static final int GALLERY_IMAGE_REQUEST = 1;
     public static final int CAMERA_PERMISSIONS_REQUEST = 2;
     public static final int CAMERA_IMAGE_REQUEST = 3;
+    public static int Time_CNT = 0;
 
     private TextView mImageDetails;
     private ImageView mMainImage;
@@ -92,7 +110,7 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
             public void onClick(View view) {
                 AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
                 builder
-                        .setMessage(R.string.dialog_select_prompt)
+                        //.setMessage(R.string.dialog_select_prompt)
                         .setPositiveButton(R.string.dialog_select_gallery, new DialogInterface.OnClickListener() {
                             @Override
                             public void onClick(DialogInterface dialog, int which) {
@@ -109,34 +127,23 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
             }
         });
 
-/*        test.setOnClickListener(new View.OnClickListener(){
-            public void onClick(View view){
-                AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
-                builder
-                        .setMessage(weight_table.toString());
 
-
-                builder.create().show();
-            }
-        });*/
         mImageDetails = (TextView) findViewById(R.id.image_details);
         mMainImage = (ImageView) findViewById(R.id.main_image);
-
         // camera
         videoView = (VideoView)findViewById(R.id.videoView);
         textView = (TextView)findViewById(R.id.textView);
 
         camera = Camera.open();
         Camera.Parameters params = camera.getParameters();
-        params.setPreviewFrameRate(10);
-        params.setPreviewFpsRange(10000, 20000);
-        params.setPreviewSize(640, 480);
+        params.setPreviewFrameRate(10); // 초당 1번
+        params.setPreviewFpsRange(10000, 20000); // FPS min, max
+        params.setPreviewSize(640, 480); // 창 사이즈
         params.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
 //        params.setPictureFormat(ImageFormat.NV21);
-        params.setPreviewFormat(ImageFormat.JPEG);
-        camera.setDisplayOrientation(90);
+        params.setPreviewFormat(NV21);
+        camera.setDisplayOrientation(90); // 각도
         camera.setParameters(params);
-        Log.e("hsy test","test");
 
         holder = videoView.getHolder();
         holder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
@@ -277,20 +284,24 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
                         // Convert the bitmap to a JPEG
                         // Just in case it's a format that Android understands but Cloud Vision
                         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-                        if(Camera == true){
+                        if (Camera == true) {
                             bitmap.compress(Bitmap.CompressFormat.JPEG, 90, byteArrayOutputStream);
-                        }
-                        else{
+                        } else {
                             bitmap.compress(Bitmap.CompressFormat.PNG, 90, byteArrayOutputStream);
                         }
-                        Log.e("hsy test", ""+Camera);
 
                         byte[] imageBytes = byteArrayOutputStream.toByteArray();
+                        //ImageIO.write(imageBytes, "JPEG" , new File("filename.jpg"));
+
+                        String text = new String(imageBytes, StandardCharsets.US_ASCII);
+
 
                         // Base64 encode the JPEG
+                        String base64_test = Base64.encodeToString(imageBytes, Base64.DEFAULT);
+                        Log.e("encoding test",base64_test);
                         base64EncodedImage.encodeContent(imageBytes);
                         annotateImageRequest.setImage(base64EncodedImage);
-
+                        //base64EncodedImage.get
                         // add the features we want
                         annotateImageRequest.setFeatures(new ArrayList<Feature>() {{
                             Feature labelDetection = new Feature();
@@ -326,6 +337,8 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
             }
         }.execute();
     }
+
+
 /*
     public Bitmap scaleBitmapDown(Bitmap bitmap, int maxDimension) {
 
@@ -350,18 +363,8 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
     private String convertResponseToString(BatchAnnotateImagesResponse response) {
         String message = "I found these things:\n\n";
         boolean wordExists = false;
+        boolean roadExists;
         double sum = 0;
-        double intercept = 0.467190807864;
-        String arrayOfKey[] = {"family car", "automotive exterior", "driving", "area", "controlled access highway", "sky", "traffic sign", "sport utility vehicle", "skyscraper", "vehicle",
-                "residential area", "highway", "metropolis", "tower block", "thoroughfare", "track", "guard rail", "suburb", "skyway", "traffic", "walkway", "mode of transport", "intersection",
-                "structure", "building", "mixed use", "girder bridge", "road trip", "plaza", "tree", "plant", "skyline", "horizon", "minivan", "public transport", "sidewalk", "road",
-                "bridge", "compact car", "asphalt", "fixed link", "overpass", "shoulder", "pedestrian", "urban design", "street", "transport", "traffic congestion", "real estate",
-                "urban area", "neighbourhood", "road surface"};
-        double arrayOfWeight[] = {0.001959506, -0.000343122, 0.001275561, 0.001599445, 0.000541903, 0.00268464, 0.000818015, -0.003733233, 0.000110012, -0.002045991, 0.000873594,
-                0.000193858, -0.000141353, 0.004337384, -0.000696148, 3.61E-05, 0.001959947, 0.000340459, 0.000160082, 0.001247439, -0.002186815, 0.000794712, -0.000493615, -0.00198564, -0.000546126,
-                -0.000261767, -0.003233404, 0.002249064, 0.001689095, -0.000727519, -0.001039317, -0.000664931, -0.000457226, 0.000439203, -0.003442012, -0.001587461, 0.001189973, 0.000109912, -0.000714525,
-                -5.31E-05, -0.000120956, -0.001965535, 0.000462156, -0.001215803, 0.001701634, -0.002908464, -0.000100532, -0.00119247, 0.000177161, 0.00090039, 0.000377653, -5.68E-05};
-        //Log.e("hsy test", "arrayOfKey.length:" + arrayOfKey.length +", arrayOfWeight.length:" + arrayOfWeight.length);
 
         Hashtable<String, Double> weight_table = new Hashtable();
         for (int i=0; i< arrayOfKey.length;i++){
@@ -379,6 +382,8 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
             message += "nothing";
         }
 
+        roadExists = weight_table.containsKey("Road");
+        if (roadExists == false){message += "도로가 아닙니다"; return message;}
 
         for (EntityAnnotation label : labels){
             wordExists = weight_table.containsKey(label.getDescription());
@@ -400,10 +405,26 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
 
     @Override
     public void onPreviewFrame(byte[] data, Camera camera) {
-        textView.setText("DATA: " + data.toString());
+        //Log.e("test", "format:" + camera.getParameters().getSupportedPreviewFormats());
+
+        YuvImage yuv = new YuvImage(data, NV21, camera.getParameters().getPreviewSize().width, camera.getParameters().getPreviewSize().height, null);
+        Rect rect = new Rect (0, 0, camera.getParameters ().getPreviewSize().width, camera.getParameters ().getPreviewSize().height);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream ();
+        yuv.compressToJpeg (rect, 100, baos);
+        Bitmap bmp = BitmapFactory.decodeByteArray (baos.toByteArray (), 0, baos.size ());
+
+        textView.setText("DATA " + data.toString());
         textView.setHighlightColor(Color.BLACK);
         textView.setTextColor(Color.WHITE);
         textView.setShadowLayer(2.0f, 1.0f, 1.0f, Color.BLACK);
+        Time_CNT++;
+        if(Time_CNT % 200 == 0){
+            try {
+                callCloudVision(bmp,true);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     @Override
@@ -419,7 +440,7 @@ public class MainActivity extends AppCompatActivity implements SurfaceHolder.Cal
     }
     @Override
     public void surfaceChanged(SurfaceHolder surfaceHolder, int i, int i1, int i2) {
-        camera.setPreviewCallback(this);
+        camera.setPreviewCallback(this); // 얘가 onPreviewFrame()함수를 호출
     }
 
     @Override
